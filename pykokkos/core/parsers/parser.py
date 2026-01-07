@@ -40,30 +40,44 @@ class Parser:
     Parse a PyKokkos workload and its dependencies
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: Optional[str], pk_import: Optional[str] = None):
         """
         Parse the file and find all entities
 
-        :param path: the path to the file
+        :param path: the path to the file (None for fused workunits)
+        :param pk_import: the pykokkos import identifier (required when path is None)
         """
 
         self.lines: List[str]
         self.tree: ast.Module
-        with open(path, "r") as f:
-            self.lines = f.readlines()
-            self.tree = ast.parse("".join(self.lines))
+        if path is not None:
+            with open(path, "r") as f:
+                self.lines = f.readlines()
+                self.tree = ast.parse("".join(self.lines))
+            self.path: Optional[str] = path
+            self.pk_import: str = self.get_import()
+            self.workloads: Dict[str, PyKokkosEntity] = {}
+            self.classtypes: Dict[str, PyKokkosEntity] = {}
+            self.functors: Dict[str, PyKokkosEntity] = {}
+            self.workunits: Dict[str, PyKokkosEntity] = {}
 
-        self.path: str = path
-        self.pk_import: str = self.get_import()
-        self.workloads: Dict[str, PyKokkosEntity] = {}
-        self.classtypes: Dict[str, PyKokkosEntity] = {}
-        self.functors: Dict[str, PyKokkosEntity] = {}
-        self.workunits: Dict[str, PyKokkosEntity] = {}
-
-        self.workloads = self.get_entities(PyKokkosStyles.workload)
-        self.classtypes = self.get_entities(PyKokkosStyles.classtype)
-        self.functors = self.get_entities(PyKokkosStyles.functor)
-        self.workunits = self.get_entities(PyKokkosStyles.workunit)
+            self.workloads = self.get_entities(PyKokkosStyles.workload)
+            self.classtypes = self.get_entities(PyKokkosStyles.classtype)
+            self.functors = self.get_entities(PyKokkosStyles.functor)
+            self.workunits = self.get_entities(PyKokkosStyles.workunit)
+        else:
+            # For fused workunits, we don't have a file to parse
+            # but we still need a parser instance for helper methods
+            if pk_import is None:
+                raise ValueError("pk_import must be provided when path is None")
+            self.lines = []
+            self.tree = ast.Module(body=[])
+            self.path = None
+            self.pk_import = pk_import
+            self.workloads: Dict[str, PyKokkosEntity] = {}
+            self.classtypes: Dict[str, PyKokkosEntity] = {}
+            self.functors: Dict[str, PyKokkosEntity] = {}
+            self.workunits: Dict[str, PyKokkosEntity] = {}
 
     def get_import(self) -> str:
         """
@@ -151,6 +165,21 @@ class Parser:
 
         return entities
 
+    def _apply_inferred_types_to_args(
+        self, args: List[ast.arg], inferred_types: Dict[str, str]
+    ) -> None:
+        """
+        Helper method to apply inferred types to function arguments.
+        Used by both fix_types and fix_function_types.
+
+        :param args: List of argument AST nodes
+        :param inferred_types: Dictionary mapping parameter names to type strings
+        """
+        for arg in args:
+            if arg.annotation is None and arg.arg in inferred_types:
+                type_str = inferred_types[arg.arg]
+                arg.annotation = self.get_annotation_node(type_str)
+
     def fix_types(self, entity: PyKokkosEntity, updated_types: UpdatedTypes) -> ast.AST:
         """
         Inject (into the entity AST) the missing annotations for datatypes that have been inferred.
@@ -172,16 +201,27 @@ class Parser:
         if needs_reset:
             entity_tree = self.reset_entity_tree(entity_tree, updated_types)
 
-        for arg_obj in entity_tree.args.args:
-            # Type already provided by the user
-            if arg_obj.arg not in updated_types.inferred_types:
-                continue
-
-            update_type = updated_types.inferred_types[arg_obj.arg]
-            arg_obj.annotation = self.get_annotation_node(update_type)
+        # Reuse the shared logic
+        self._apply_inferred_types_to_args(
+            entity_tree.args.args, updated_types.inferred_types
+        )
 
         assert entity_tree is not None
         return entity_tree
+
+    def fix_function_types(
+        self, function: ast.FunctionDef, inferred_types: Dict[str, str]
+    ) -> ast.FunctionDef:
+        """
+        Apply inferred types to a Kokkos function AST.
+        Reuses the same logic as fix_types.
+
+        :param function: The function AST to modify
+        :param inferred_types: Dictionary mapping parameter names to type strings
+        :returns: The modified function AST
+        """
+        self._apply_inferred_types_to_args(function.args.args, inferred_types)
+        return function
 
     def check_self(self, entity_tree: ast.AST) -> bool:
         """
@@ -293,6 +333,12 @@ class Parser:
             annotation_node = ast.Attribute(
                 value=ast.Name(id=self.pk_import, ctx=ast.Load()),
                 attr="TeamMember",
+                ctx=ast.Load(),
+            )
+        elif type in ("double", "float"):
+            annotation_node = ast.Attribute(
+                value=ast.Name(id=self.pk_import, ctx=ast.Load()),
+                attr=type,
                 ctx=ast.Load(),
             )
         else:

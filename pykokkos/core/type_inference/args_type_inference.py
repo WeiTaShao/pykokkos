@@ -56,8 +56,51 @@ SUPPORTED_NP_DTYPES = [attr for attr in dir(DataType) if not attr.startswith("__
     "float32",
 ]
 
-# Cache for original argument nodes: Maps stringified workunit reference, e.g str(workunit_name), to the original ast.arguments node
+# Supported array libraries for type inference
+SUPPORTED_ARRAY_LIBRARIES = ("numpy", "cupy", "torch", "jax", "jaxlib")
+
 ORIGINAL_PARAMS: Dict[str, ast.arguments] = {}
+
+
+def _infer_type_from_value(value) -> str:
+    """
+    Infer the type string from a Python value, reusing the same logic as infer_other_args.
+    Uses DataType enum and SUPPORTED_NP_DTYPES for consistency.
+
+    :param value: The Python value to infer type from
+    :returns: Type string in the format used by type inference (e.g., "int", "double", "numpy:int64")
+    """
+    param_type = type(value).__name__
+
+    if param_type == "int":
+        return "int"
+    elif param_type == "float":
+        return DataType.double.name
+    elif param_type == "bool":
+        return DataType.bool.name
+    else:
+        # Handle array library scalar types (numpy, cupy, torch, etc.)
+        pckg_name = type(value).__module__
+
+        if any(pckg_name.startswith(pkg) for pkg in SUPPORTED_ARRAY_LIBRARIES):
+            if param_type not in SUPPORTED_NP_DTYPES:
+                raise TypeError(
+                    f"Array type {param_type} from {pckg_name} is unsupported"
+                )
+
+            if param_type == DataType.float64.name or param_type == "float64":
+                param_type = DataType.double.name
+            elif param_type == DataType.float32.name or param_type == "float32":
+                param_type = DataType.float.name
+
+            return f"numpy:{param_type}"
+        else:
+            supported_libs = ", ".join(SUPPORTED_ARRAY_LIBRARIES)
+            raise TypeError(
+                f"Unsupported type for type inference: {type(value)} from module {pckg_name}. "
+                f"Only Python primitives (int, float, bool) and array library types "
+                f"({supported_libs}) are supported."
+            )
 
 
 def check_missing_annotations(param_list: List[ast.arg]) -> bool:
@@ -280,33 +323,14 @@ def infer_other_args(
         if param.annotation is not None:
             continue
 
-        param_type = type(value).__name__
-
-        # switch integer values over 31 bits (signed positive value) to numpy:int64
-        if param_type == "int" and value.bit_length() > 31:
-            param_type = "numpy:int64"
-
-        # check if package name is numpy (handling numpy primitives)
-        pckg_name = type(value).__module__
-
-        if pckg_name == "numpy":
-            if param_type not in SUPPORTED_NP_DTYPES:
-                err_str = f"Numpy type {param_type} is unsupported"
-                raise TypeError(err_str)
-
-            if param_type == "float64":
-                param_type = "double"
-            if param_type == "float32":
-                param_type = "float"
-            # numpy:<type>, Will switch to pk.<type> in parser.fix_types
-            param_type = pckg_name + ":" + param_type
-
         if isinstance(value, ViewType):
             view_dtype = get_pk_datatype(value.dtype)
             if not view_dtype:
                 raise TypeError("Cannot infer datatype for view:", param.arg)
 
             param_type = "View" + str(len(value.shape)) + "D:" + view_dtype
+        else:
+            param_type = _infer_type_from_value(value)
 
         updated_types.inferred_types[param.arg] = param_type
 
