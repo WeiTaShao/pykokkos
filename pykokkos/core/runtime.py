@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 from typing import Any, Callable, Dict, Optional, Set, Tuple, Type, Union, List
 import sysconfig
+import hashlib
 
 import numpy as np
 
@@ -174,6 +175,7 @@ class Runtime:
     def precompile_workunit(
         self,
         workunit: Callable[..., None],
+        ast_signature: str,
         space: ExecutionSpace,
         updated_decorator: Optional[UpdatedDecorator],
         updated_types: Optional[UpdatedTypes],
@@ -186,15 +188,21 @@ class Runtime:
         precompile the workunit
 
         :param workunit: the workunit function object
+        :param ast_signature: Hash/identifer string for workunit module against AST
         :param space: the ExecutionSpace for which the bindings are generated
         :param updated_decorator: Object for decorator specifier
         :param updated_types: Object with type inference information
+        :param types_signature: Hash/identifer string for workunit module against data types
         :param restrict_views: a set of view names that do not alias any other views
         :returns: the members the functor is containing
         """
 
         module_setup: ModuleSetup = self.get_module_setup(
-            workunit, space, types_signature, restrict_signature
+            workunit,
+            space,
+            ast_signature,
+            types_signature=types_signature,
+            restrict_signature=restrict_signature,
         )
         members: PyKokkosMembers = self.compiler.compile_object(
             module_setup,
@@ -342,9 +350,17 @@ class Runtime:
             }
             restrict_views, restrict_signature = get_restrict_views(view_dict)
 
+        # Set ast signature
+        if isinstance(parser, list):
+            ast_signature = "".join([p.signature for p in parser])
+            ast_signature = hashlib.md5(ast_signature.encode()).hexdigest()
+        else:
+            ast_signature = parser.signature
+
         execution_space: ExecutionSpace = policy.space.space
         members: PyKokkosMembers = self.precompile_workunit(
             workunit,
+            ast_signature,
             execution_space,
             updated_decorator,
             updated_types,
@@ -355,7 +371,11 @@ class Runtime:
         )
 
         module_setup: ModuleSetup = self.get_module_setup(
-            workunit, execution_space, types_signature, restrict_signature
+            workunit,
+            execution_space,
+            ast_signature,
+            types_signature=types_signature,
+            restrict_signature=restrict_signature,
         )
         return self.execute(
             workunit,
@@ -812,6 +832,8 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
+        ast_signature: str,
+        *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,
     ) -> ModuleSetup:
@@ -820,6 +842,7 @@ class Runtime:
 
         :param entity: the workload or workunit object
         :param space: the execution space
+        :param ast_signature: Hash/identifer string for workunit module against AST
         :param types_signature: Hash/identifer string for workunit module against data types
         :param restrict_signature: Hash/identifer string for views that do not alias any other views
         :returns: the ModuleSetup object
@@ -830,13 +853,23 @@ class Runtime:
         )
 
         module_setup_id = self.get_module_setup_id(
-            entity, space, types_signature, restrict_signature
+            entity,
+            space,
+            ast_signature,
+            types_signature=types_signature,
+            restrict_signature=restrict_signature,
         )
 
         if module_setup_id in self.module_setups:
             return self.module_setups[module_setup_id]
 
-        module_setup = ModuleSetup(entity, space, types_signature, restrict_signature)
+        module_setup = ModuleSetup(
+            entity,
+            space,
+            ast_signature,
+            types_signature=types_signature,
+            restricted_views=restrict_signature,
+        )
         self.module_setups[module_setup_id] = module_setup
 
         return module_setup
@@ -845,6 +878,8 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
+        ast_signature: str,
+        *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,
     ) -> Tuple:
@@ -856,6 +891,7 @@ class Runtime:
 
         :param entity: the workload or workunit object
         :param space: the execution space
+        :param ast_signature: Hash/identifer string for workunit module against AST
         :param types_signature: optional identifier/hash string for
             types of parameters against workunit module
         :param restrict_signature: Hash/identifer string for views
@@ -890,6 +926,7 @@ class Runtime:
                 module_setup_id_list.append(types_signature)
             if restrict_signature is not None:
                 module_setup_id_list.append(restrict_signature)
+            module_setup_id_list.append(ast_signature)
 
             module_setup_id = tuple(module_setup_id_list)
 
