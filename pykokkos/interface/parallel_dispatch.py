@@ -9,6 +9,7 @@ from pykokkos.core.cppast import BuiltinType
 
 from .execution_policy import ExecutionPolicy, RangePolicy
 from .execution_space import ExecutionSpace, DeviceExecutionSpace
+from .reducers import Reducer
 from .views import ViewType, array
 
 from .interface_util import generic_error, get_filename, get_lineno
@@ -35,6 +36,11 @@ BUILTIN_TO_NUMPY: Dict[str, np.dtype] = {
     BuiltinType.DOUBLE.value: np.float64,
     BuiltinType.BOOL.value: np.bool_,
 }
+
+
+def get_policy_execution_space(policy: ExecutionPolicy) -> ExecutionSpace:
+    space = policy.space
+    return space.space if hasattr(space, "space") else space
 
 
 def parse_list_annotation(annotation) -> Tuple[int, np.dtype]:
@@ -303,7 +309,11 @@ def parallel_for(*args, **kwargs) -> None:
 
     kwargs = dict(kwargs)
     handled_args: HandledArgs = handle_args(True, args)
-    convert_arrays(kwargs, handled_args.workunit, handled_args.policy.space.space)
+    convert_arrays(
+        kwargs,
+        handled_args.workunit,
+        get_policy_execution_space(handled_args.policy),
+    )
 
     runtime_singleton.runtime.run_workunit(
         handled_args.name, handled_args.policy, handled_args.workunit, "for", **kwargs
@@ -319,8 +329,21 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
     """
 
     kwargs = dict(kwargs)
+    reducer = kwargs.pop("reducer", None)
+    if reducer is not None:
+        if operation != "reduce":
+            raise ValueError("ERROR: reducer is only supported for parallel_reduce")
+        if not isinstance(reducer, Reducer):
+            raise TypeError(
+                f"ERROR: reducer expected to be a pk.Reducer, got '{reducer}' of type '{type(reducer)}'"
+            )
+
     handled_args: HandledArgs = handle_args(True, args)
-    convert_arrays(kwargs, handled_args.workunit, handled_args.policy.space.space)
+    convert_arrays(
+        kwargs,
+        handled_args.workunit,
+        get_policy_execution_space(handled_args.policy),
+    )
 
     args_to_hash: List = []
     args_not_to_hash: Dict = {}
@@ -336,6 +359,8 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
             break
 
     args_to_hash.append(operation)
+    if reducer is not None:
+        args_to_hash.append(reducer.name)
 
     to_hash = frozenset(args_to_hash)
     cache_key: int = hash(to_hash)
@@ -350,6 +375,7 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
         handled_args.policy,
         handled_args.workunit,
         operation,
+        reducer=reducer,
         **kwargs,
     )
 

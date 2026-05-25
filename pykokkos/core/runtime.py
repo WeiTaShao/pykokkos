@@ -37,11 +37,24 @@ from pykokkos.interface import (
     ViewType,
     is_host_execution_space,
 )
+from pykokkos.interface.reducers import Reducer
 import pykokkos.kokkos_manager as km
 
 from .compiler import Compiler
 from .module_setup import EntityMetadata, get_metadata, ModuleSetup
 from .run_debug import run_workload_debug, run_workunit_debug
+
+
+def reducer_cache_signature(reducer: Optional[Reducer]) -> Optional[str]:
+    if reducer is None:
+        return None
+
+    return reducer.name
+
+
+def get_policy_execution_space(policy: ExecutionPolicy) -> ExecutionSpace:
+    space = policy.space
+    return space.space if hasattr(space, "space") else space
 
 
 def _calculate_aligned_scratch_size(
@@ -182,6 +195,7 @@ class Runtime:
         types_signature: Optional[str],
         restrict_views: Set[str],
         restrict_signature: Optional[str],
+        reducer: Optional[Reducer] = None,
         **kwargs,
     ) -> PyKokkosMembers:
         """
@@ -203,6 +217,7 @@ class Runtime:
             ast_signature,
             types_signature=types_signature,
             restrict_signature=restrict_signature,
+            reducer_signature=reducer_cache_signature(reducer),
         )
         members: PyKokkosMembers = self.compiler.compile_object(
             module_setup,
@@ -212,6 +227,7 @@ class Runtime:
             updated_types,
             types_signature,
             restrict_views,
+            reducer.name if reducer is not None else None,
             **kwargs,
         )
 
@@ -239,6 +255,7 @@ class Runtime:
         workunit: Union[Callable[..., None], List[Callable[..., None]]],
         operation: str,
         initial_value: Union[float, int] = 0,
+        reducer: Optional[Reducer] = None,
         **kwargs,
     ) -> Optional[Union[float, int]]:
         """
@@ -288,7 +305,7 @@ class Runtime:
             return future
 
         return self.execute_workunit(
-            name, policy, workunit, operation, parser, **kwargs
+            name, policy, workunit, operation, parser, reducer=reducer, **kwargs
         )
 
     def execute_workunit(
@@ -298,6 +315,7 @@ class Runtime:
         workunit: Union[Callable[..., None], List[Callable[..., None]]],
         operation: str,
         parser: Union[Parser, List[Parser]],
+        reducer: Optional[Reducer] = None,
         **kwargs,
     ) -> Optional[Union[float, int]]:
         """
@@ -357,7 +375,7 @@ class Runtime:
         else:
             ast_signature = parser.signature
 
-        execution_space: ExecutionSpace = policy.space.space
+        execution_space: ExecutionSpace = get_policy_execution_space(policy)
         members: PyKokkosMembers = self.precompile_workunit(
             workunit,
             ast_signature,
@@ -367,6 +385,7 @@ class Runtime:
             types_signature,
             restrict_views,
             restrict_signature,
+            reducer=reducer,
             **kwargs,
         )
 
@@ -376,6 +395,7 @@ class Runtime:
             ast_signature,
             types_signature=types_signature,
             restrict_signature=restrict_signature,
+            reducer_signature=reducer_cache_signature(reducer),
         )
         return self.execute(
             workunit,
@@ -832,10 +852,11 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
-        ast_signature: str,
+        ast_signature: Optional[str] = None,
         *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,
+        reducer_signature: Optional[str] = None,
     ) -> ModuleSetup:
         """
         Get the compiled module setup information unique to an entity + space
@@ -858,6 +879,7 @@ class Runtime:
             ast_signature,
             types_signature=types_signature,
             restrict_signature=restrict_signature,
+            reducer_signature=reducer_signature,
         )
 
         if module_setup_id in self.module_setups:
@@ -869,6 +891,7 @@ class Runtime:
             ast_signature,
             types_signature=types_signature,
             restricted_views=restrict_signature,
+            reducer_signature=reducer_signature,
         )
         self.module_setups[module_setup_id] = module_setup
 
@@ -878,10 +901,11 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
-        ast_signature: str,
+        ast_signature: Optional[str] = None,
         *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,
+        reducer_signature: Optional[str] = None,
     ) -> Tuple:
         """
         Get a unique module setup id for an entity + space
@@ -926,6 +950,8 @@ class Runtime:
                 module_setup_id_list.append(types_signature)
             if restrict_signature is not None:
                 module_setup_id_list.append(restrict_signature)
+            if reducer_signature is not None:
+                module_setup_id_list.append(reducer_signature)
             module_setup_id_list.append(ast_signature)
 
             module_setup_id = tuple(module_setup_id_list)

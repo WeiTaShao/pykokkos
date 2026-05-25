@@ -10,6 +10,34 @@ from . import visitors_util
 from .pykokkos_visitor import PyKokkosVisitor
 
 
+VALUE_LOC_REDUCERS = {"MaxLoc", "MinLoc"}
+MINMAX_REDUCERS = {"MinMax"}
+MINMAX_LOC_REDUCERS = {"MinMaxLoc"}
+NON_SCALAR_REDUCERS = VALUE_LOC_REDUCERS | MINMAX_REDUCERS | MINMAX_LOC_REDUCERS
+
+
+def get_cpp_type_name(decltype: cppast.Type) -> str:
+    if isinstance(decltype, cppast.PrimitiveType):
+        typename = decltype.typename
+        return typename.value if hasattr(typename, "value") else typename
+
+    if isinstance(decltype, cppast.ClassType):
+        return decltype.typename
+
+    raise TypeError(f"Unsupported reducer value type: {decltype}")
+
+
+def get_reducer_value_type(reducer: str, value_type: str) -> str:
+    if reducer in VALUE_LOC_REDUCERS:
+        return f"Kokkos::{reducer}<{value_type},int>::value_type"
+    if reducer in MINMAX_REDUCERS:
+        return f"Kokkos::{reducer}<{value_type}>::value_type"
+    if reducer in MINMAX_LOC_REDUCERS:
+        return f"Kokkos::{reducer}<{value_type},int>::value_type"
+
+    raise ValueError(f"Reducer {reducer} does not use a non-scalar value_type")
+
+
 class WorkunitVisitor(PyKokkosVisitor):
     def __init__(
         self,
@@ -22,10 +50,14 @@ class WorkunitVisitor(PyKokkosVisitor):
         dependency_methods: Dict[str, List[str]],
         pk_import: str,
         restrict_views: Set[str],
+        reducer: Optional[str] = None,
+        reducer_workunit: Optional[str] = None,
         debug=False,
         path: Optional[str] = None,
     ):
         self.has_rand_call: bool = False
+        self.reducer: Optional[str] = reducer
+        self.reducer_workunit: Optional[str] = reducer_workunit
         super().__init__(
             env,
             src,
@@ -224,6 +256,17 @@ class WorkunitVisitor(PyKokkosVisitor):
 
         if operation in ("scan", "reduce"):
             acc: cppast.ParmVarDecl = self.visit_arg(acc_arg)
+            if (
+                operation == "reduce"
+                and self.reducer in NON_SCALAR_REDUCERS
+                and node.parent.name == self.reducer_workunit
+            ):
+                value_type = get_cpp_type_name(acc.decltype)
+                acc_type = cppast.ClassType(
+                    get_reducer_value_type(self.reducer, value_type)
+                )
+                acc_type.is_reference = True
+                acc = cppast.ParmVarDecl(acc_type, acc.declname)
             acc.decltype.is_reference = True
             cpp_args.append(acc)
 

@@ -478,7 +478,10 @@ def get_type_info(
 
     is_standalone_workunit: bool = True
     list_passed: bool = True
-    execution_space: ExecutionSpace = policy.space.space
+    policy_space = policy.space
+    execution_space: ExecutionSpace = (
+        policy_space.space if hasattr(policy_space, "space") else policy_space
+    )
 
     entity_AST: Union[List[ast.AST], ast.AST] = []
 
