@@ -177,7 +177,10 @@ class Runtime:
             run_workload_debug(workload)
             return
 
-        module_setup: ModuleSetup = self.get_module_setup(workload, space)
+        parser = Parser(get_metadata(workload).path)
+        module_setup: ModuleSetup = self.get_module_setup(
+            workload, space, parser.signature
+        )
         members: PyKokkosMembers = self.compiler.compile_object(
             module_setup, space, km.is_uvm_enabled(), None, None, None, set()
         )
@@ -852,7 +855,7 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
-        ast_signature: Optional[str] = None,
+        ast_signature: str,
         *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,
@@ -901,7 +904,7 @@ class Runtime:
         self,
         entity: Union[object, Callable[..., None]],
         space: ExecutionSpace,
-        ast_signature: Optional[str] = None,
+        ast_signature: str,
         *,
         types_signature: Optional[str] = None,
         restrict_signature: Optional[str] = None,

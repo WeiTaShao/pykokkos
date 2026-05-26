@@ -166,8 +166,7 @@ def assert_minmaxloc(
     actual, expected_min, expected_min_loc, expected_max, expected_max_loc
 ):
     if all(
-        hasattr(actual, field)
-        for field in ("min_val", "min_loc", "max_val", "max_loc")
+        hasattr(actual, field) for field in ("min_val", "min_loc", "max_val", "max_loc")
     ):
         min_value = actual.min_val
         min_loc = actual.min_loc
@@ -206,7 +205,13 @@ def test_squaresum_types(series_max, dtype):
         ("Sum", pk.Sum, sum_int, np.array([1, 2, 3, 4], dtype=np.int64), 10),
         ("Prod", pk.Prod, prod_int, np.array([1, 2, 3, 4], dtype=np.int64), 24),
         ("Min", pk.Min, min_float, np.array([4.0, 2.0, 9.0], dtype=np.float64), 2.0),
-        ("Max", pk.Max, max_float, np.array([-5.0, -1.0, -3.0], dtype=np.float64), -1.0),
+        (
+            "Max",
+            pk.Max,
+            max_float,
+            np.array([-5.0, -1.0, -3.0], dtype=np.float64),
+            -1.0,
+        ),
         (
             "BAnd",
             pk.BAnd,

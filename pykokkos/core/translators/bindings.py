@@ -8,24 +8,13 @@ from pykokkos.core.visitors import cpp_view_type, KokkosMainVisitor, visitors_ut
 from pykokkos.interface.data_types import DataType
 
 from .members import PyKokkosMembers
-
-
-VALUE_LOC_REDUCERS = {"MaxLoc", "MinLoc"}
-MINMAX_REDUCERS = {"MinMax"}
-MINMAX_LOC_REDUCERS = {"MinMaxLoc"}
-NON_SCALAR_REDUCERS = VALUE_LOC_REDUCERS | MINMAX_REDUCERS | MINMAX_LOC_REDUCERS
-
-
-def is_non_scalar_reducer(reducer: Optional[str]) -> bool:
-    return reducer in NON_SCALAR_REDUCERS
-
-
-def get_reducer_scalar_type(acc_type: str) -> str:
-    match = re.match(r"Kokkos::(?:MaxLoc|MinLoc|MinMax|MinMaxLoc)<([^,>]+)", acc_type)
-    if match is None:
-        return acc_type
-
-    return match.group(1)
+from .reducer_util import (
+    MINMAX_LOC_REDUCERS,
+    MINMAX_REDUCERS,
+    VALUE_LOC_REDUCERS,
+    get_reducer_scalar_type,
+    is_non_scalar_reducer,
+)
 
 
 def get_reducer_expr(reducer: str, scalar_type: str) -> str:
@@ -69,9 +58,9 @@ def is_hierarchical(workunit: Optional[cppast.MethodDecl]) -> bool:
     # Iterate over each parameter (skipping the tag)
     for p in workunit.params[1:]:
         if isinstance(p.decltype, cppast.ClassType):
-            if p.decltype.typename.startswith("Kokkos::") and p.decltype.typename.endswith(
-                "::value_type"
-            ):
+            if p.decltype.typename.startswith(
+                "Kokkos::"
+            ) and p.decltype.typename.endswith("::value_type"):
                 continue
             return True
 
@@ -594,10 +583,23 @@ def bind_workunits_single(
         workunit_reducer = reducer if workunit_name == reducer_workunit else None
 
         kernel: str = generate_kernel(
-            functor, members, operation, workunit, n, kernel_name, real, workunit_reducer
+            functor,
+            members,
+            operation,
+            workunit,
+            n,
+            kernel_name,
+            real,
+            workunit_reducer,
         )
         wrapper: str = generate_wrapper(
-            members, operation, workunit, wrapper_name, kernel_name, real, workunit_reducer
+            members,
+            operation,
+            workunit,
+            wrapper_name,
+            kernel_name,
+            real,
+            workunit_reducer,
         )
 
         bindings.extend([kernel, wrapper])
