@@ -134,7 +134,6 @@ class Compiler:
         updated_types: Optional[UpdatedTypes],
         types_signature: Optional[str],
         restrict_views: Set[str],
-        reducer: Optional[str] = None,
         **kwargs,
     ) -> PyKokkosMembers:
         """
@@ -215,7 +214,6 @@ class Compiler:
             force_uvm,
             members,
             restrict_views,
-            reducer,
         )
         return members
 
@@ -229,7 +227,6 @@ class Compiler:
         force_uvm: bool,
         members: PyKokkosMembers,
         restrict_views: Set[str],
-        reducer: Optional[str] = None,
     ) -> None:
         """
         Compile the entity
@@ -259,7 +256,7 @@ class Compiler:
             self.functor_file,
             self.functor_cast_file,
             members,
-            reducer,
+            module_setup.reducer_name,
         )
         t_start: float = time.perf_counter()
         functor: List[str]

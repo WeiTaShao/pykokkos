@@ -87,6 +87,7 @@ class ModuleSetup:
         types_signature: Optional[str] = None,
         restricted_views: Optional[Set[str]] = None,
         reducer_signature: Optional[str] = None,
+        reducer_name: Optional[str] = None,
     ):
         """
         ModuleSetup constructor
@@ -110,6 +111,7 @@ class ModuleSetup:
         self.ast_signature = ast_signature
         self.types_signature = types_signature
         self.reducer_signature = reducer_signature
+        self.reducer_name = reducer_name
         self.restrict_signature: Optional[str] = None
         if restricted_views is not None:
             self.restrict_signature = hashlib.md5(

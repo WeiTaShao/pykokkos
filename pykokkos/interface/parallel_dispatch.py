@@ -361,6 +361,7 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
     args_to_hash.append(operation)
     if reducer is not None:
         args_to_hash.append(reducer.name)
+        kwargs["reducer"] = reducer
 
     to_hash = frozenset(args_to_hash)
     cache_key: int = hash(to_hash)
@@ -375,7 +376,6 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
         handled_args.policy,
         handled_args.workunit,
         operation,
-        reducer=reducer,
         **kwargs,
     )
 
