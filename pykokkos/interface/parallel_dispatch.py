@@ -39,8 +39,7 @@ BUILTIN_TO_NUMPY: Dict[str, np.dtype] = {
 
 
 def get_policy_execution_space(policy: ExecutionPolicy) -> ExecutionSpace:
-    space = policy.space
-    return space.space if hasattr(space, "space") else space
+    return policy.space.space
 
 
 def parse_list_annotation(annotation) -> Tuple[int, np.dtype]:
