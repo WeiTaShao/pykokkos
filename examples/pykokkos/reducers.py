@@ -67,9 +67,7 @@ def minmax_float(i: int, acc: pk.Acc[pk.double], data: pk.View1D[pk.double]) -> 
 
 
 @pk.workunit
-def minmaxloc_float(
-    i: int, acc: pk.Acc[pk.double], data: pk.View1D[pk.double]
-) -> None:
+def minmaxloc_float(i: int, acc: pk.Acc[pk.double], data: pk.View1D[pk.double]) -> None:
     if data[i] < acc.min_val:
         acc.min_val = data[i]
         acc.min_loc = i

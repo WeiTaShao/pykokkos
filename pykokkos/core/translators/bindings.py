@@ -20,9 +20,9 @@ from .reducer_util import (
 def get_reducer_expr(reducer: str, scalar_type: str) -> str:
     if reducer in VALUE_LOC_REDUCERS:
         return f"Kokkos::{reducer}<{scalar_type},int>({Keywords.Accumulator.value})"
-    if reducer in MINMAX_REDUCERS:
+    elif reducer in MINMAX_REDUCERS:
         return f"Kokkos::{reducer}<{scalar_type}>({Keywords.Accumulator.value})"
-    if reducer in MINMAX_LOC_REDUCERS:
+    elif reducer in MINMAX_LOC_REDUCERS:
         return f"Kokkos::{reducer}<{scalar_type},int>({Keywords.Accumulator.value})"
 
     return f"Kokkos::{reducer}<{scalar_type}>({Keywords.Accumulator.value})"
@@ -31,9 +31,9 @@ def get_reducer_expr(reducer: str, scalar_type: str) -> str:
 def get_reducer_return_expr(reducer: Optional[str]) -> str:
     if reducer in VALUE_LOC_REDUCERS:
         return f"pybind11::make_tuple({Keywords.Accumulator.value}.val,{Keywords.Accumulator.value}.loc)"
-    if reducer in MINMAX_REDUCERS:
+    elif reducer in MINMAX_REDUCERS:
         return f"pybind11::make_tuple({Keywords.Accumulator.value}.min_val,{Keywords.Accumulator.value}.max_val)"
-    if reducer in MINMAX_LOC_REDUCERS:
+    elif reducer in MINMAX_LOC_REDUCERS:
         return (
             f"pybind11::make_tuple({Keywords.Accumulator.value}.min_val,"
             f"{Keywords.Accumulator.value}.min_loc,"
@@ -58,6 +58,7 @@ def is_hierarchical(workunit: Optional[cppast.MethodDecl]) -> bool:
     # Iterate over each parameter (skipping the tag)
     for p in workunit.params[1:]:
         if isinstance(p.decltype, cppast.ClassType):
+            # Prevent the reducer value_type from being mistakenly identified as a TeamMember
             if p.decltype.typename.startswith(
                 "Kokkos::"
             ) and p.decltype.typename.endswith("::value_type"):
