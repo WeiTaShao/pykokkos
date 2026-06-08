@@ -11,6 +11,7 @@ from .members import PyKokkosMembers
 from .reducer_util import (
     MINMAX_LOC_REDUCERS,
     MINMAX_REDUCERS,
+    SCALAR_REDUCERS,
     VALUE_LOC_REDUCERS,
     get_reducer_scalar_type,
     is_non_scalar_reducer,
@@ -24,8 +25,10 @@ def get_reducer_expr(reducer: str, scalar_type: str) -> str:
         return f"Kokkos::{reducer}<{scalar_type}>({Keywords.Accumulator.value})"
     elif reducer in MINMAX_LOC_REDUCERS:
         return f"Kokkos::{reducer}<{scalar_type},int>({Keywords.Accumulator.value})"
+    elif reducer in SCALAR_REDUCERS:
+        return f"Kokkos::{reducer}<{scalar_type}>({Keywords.Accumulator.value})"
 
-    return f"Kokkos::{reducer}<{scalar_type}>({Keywords.Accumulator.value})"
+    raise ValueError(f"unrecognized reducer {reducer}")
 
 
 def get_reducer_return_expr(reducer: Optional[str]) -> str:
@@ -40,8 +43,10 @@ def get_reducer_return_expr(reducer: Optional[str]) -> str:
             f"{Keywords.Accumulator.value}.max_val,"
             f"{Keywords.Accumulator.value}.max_loc)"
         )
+    elif reducer is None or reducer in SCALAR_REDUCERS:
+        return Keywords.Accumulator.value
 
-    return Keywords.Accumulator.value
+    raise ValueError(f"unrecognized reducer {reducer}")
 
 
 def is_hierarchical(workunit: Optional[cppast.MethodDecl]) -> bool:

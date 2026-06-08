@@ -38,10 +38,6 @@ BUILTIN_TO_NUMPY: Dict[str, np.dtype] = {
 }
 
 
-def get_policy_execution_space(policy: ExecutionPolicy) -> ExecutionSpace:
-    return policy.space.space
-
-
 def parse_list_annotation(annotation) -> Tuple[int, np.dtype]:
     """
     Recursively parse List[T] or List[List[T]] annotations to determine
@@ -311,7 +307,7 @@ def parallel_for(*args, **kwargs) -> None:
     convert_arrays(
         kwargs,
         handled_args.workunit,
-        get_policy_execution_space(handled_args.policy),
+        handled_args.policy.space.space,
     )
 
     runtime_singleton.runtime.run_workunit(
@@ -341,7 +337,7 @@ def reduce_body(operation: str, *args, **kwargs) -> Union[float, int]:
     convert_arrays(
         kwargs,
         handled_args.workunit,
-        get_policy_execution_space(handled_args.policy),
+        handled_args.policy.space.space,
     )
 
     args_to_hash: List = []

@@ -7,6 +7,7 @@ from pykokkos.core import cppast
 VALUE_LOC_REDUCERS = {"MaxLoc", "MinLoc"}
 MINMAX_REDUCERS = {"MinMax"}
 MINMAX_LOC_REDUCERS = {"MinMaxLoc"}
+SCALAR_REDUCERS = {"BAnd", "BOr", "LAnd", "LOr", "Max", "Min", "Prod", "Sum"}
 NON_SCALAR_REDUCERS = VALUE_LOC_REDUCERS | MINMAX_REDUCERS | MINMAX_LOC_REDUCERS
 
 

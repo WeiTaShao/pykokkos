@@ -52,10 +52,6 @@ def reducer_cache_signature(reducer: Optional[Reducer]) -> Optional[str]:
     return reducer.name
 
 
-def get_policy_execution_space(policy: ExecutionPolicy) -> ExecutionSpace:
-    return policy.space.space
-
-
 def _calculate_aligned_scratch_size(
     dtype, num_elements: int, alignment: int = 8
 ) -> int:
@@ -381,7 +377,7 @@ class Runtime:
         else:
             ast_signature = parser.signature
 
-        execution_space: ExecutionSpace = get_policy_execution_space(policy)
+        execution_space: ExecutionSpace = policy.space.space
         members: PyKokkosMembers = self.precompile_workunit(
             workunit,
             ast_signature,
