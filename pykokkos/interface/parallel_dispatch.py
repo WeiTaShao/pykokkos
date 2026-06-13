@@ -1,3 +1,4 @@
+import ctypes
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -49,6 +50,16 @@ BUILTIN_TO_NUMPY: Dict[str, np.dtype] = {
 }
 
 
+def c_float_dtype_name() -> str:
+    c_float_size = ctypes.sizeof(ctypes.c_float)
+    if c_float_size == np.dtype(np.float32).itemsize:
+        return "float32"
+    if c_float_size == np.dtype(np.float64).itemsize:
+        return "float64"
+
+    raise TypeError(f"Unsupported C float size: {c_float_size} bytes")
+
+
 def normalize_dtype_name(dtype) -> Optional[str]:
     if dtype is int:
         return "int32"
@@ -66,7 +77,7 @@ def normalize_dtype_name(dtype) -> Optional[str]:
 
     aliases = {
         "bool": "uint8",
-        "float": "float32",
+        "float": c_float_dtype_name(),
         "double": "float64",
     }
     return aliases.get(dtype_name, dtype_name)
@@ -97,13 +108,7 @@ def check_view_dtype_matches_annotation(
     if expected == actual:
         return
 
-    raise TypeError(
-        f"Argument '{arg_name}' expects a View with dtype {expected}, "
-        f"but received dtype {actual}. NumPy and CuPy dtype=int default to "
-        f"int64 on many platforms; use an explicit dtype such as np.int32 "
-        f"or cp.int32, or update the workunit annotation to match the "
-        f"array dtype."
-    )
+    raise TypeError(f"Argument '{arg_name}' expects a View with dtype {expected}.")
 
 
 def parse_list_annotation(annotation) -> Tuple[int, np.dtype]:
