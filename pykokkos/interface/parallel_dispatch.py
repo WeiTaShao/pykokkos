@@ -108,7 +108,10 @@ def check_view_dtype_matches_annotation(
     if expected == actual:
         return
 
-    raise TypeError(f"Argument '{arg_name}' expects a View with dtype {expected}.")
+    raise TypeError(
+        f"Argument '{arg_name}' expects a View with dtype {expected}, "
+        f"but received dtype {actual}."
+    )
 
 
 def parse_list_annotation(annotation) -> Tuple[int, np.dtype]:

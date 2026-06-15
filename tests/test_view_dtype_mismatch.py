@@ -56,7 +56,7 @@ def test_numpy_array_int64_rejected_for_int32_view():
 def test_numpy_int64_rejected_for_bare_int_view():
     arr = pk.array(np.ones(8, dtype=int))
 
-    with pytest.raises(TypeError, match="dtype=int default to int64"):
+    with pytest.raises(TypeError, match="expects a View with dtype int32"):
         pk.parallel_for(openmp_policy(8), scale_int, arr=arr)
 
 
